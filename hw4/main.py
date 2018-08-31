@@ -25,6 +25,38 @@ def sample(env,
     paths = []
     """ YOUR CODE HERE """
 
+    for num_path in range(num_paths):
+        ob = env.reset()
+        obs, acts, rews, next_obs, status, deltas = [], [], [], [], [], []
+
+        for num_step in range(horizon):
+
+            act = controller.get_action(ob)
+            new_ob, rew, done, _ = env.step(act)
+            delta = new_ob - ob 
+
+            obs.append(ob)
+            acts.append(act)
+            rews.append(rew)
+            next_obs.append(new_ob)
+            status.append(done)
+            deltas.append(deltas)
+
+            if done:
+                break
+                
+            ob = new_ob
+            
+        path = {
+            'observations': obs,
+            'actions': acts,
+            'next_observations': next_obs,
+            'deltas': deltas,
+            'dones': status,
+            'rewards': rews
+        }
+        paths.append(path)
+
     return paths
 
 # Utility to compute cost a path for a given cost function
@@ -38,6 +70,26 @@ def compute_normalization(data):
     """
 
     """ YOUR CODE HERE """
+
+    # data = list(map(list, zip(*data)))
+    
+    obs = [ path['observations'] for path in data ]
+    acts = [ path['actions'] for path in data ]
+    deltas = [ path['deltas'] for path in data ]
+
+    obs = np.array(obs)
+    acts = np.array(acts)
+    deltas = np.array(deltas)
+
+    mean_obs = obs.mean( axis = 0 )
+    std_obs  = obs.std(  axis = 0 )
+    
+    mean_deltas = deltas.mean( axis = 0 )
+    std_deltas = deltas.std( axis = 0 )
+
+    mean_action = acts.mean( axis = 0 )
+    std_action = acts.std( axis = 0 )
+
     return mean_obs, std_obs, mean_deltas, std_deltas, mean_action, std_action
 
 
@@ -112,7 +164,8 @@ def train(env,
     random_controller = RandomController(env)
 
     """ YOUR CODE HERE """
-
+    
+    data = sample(env, random_controller, num_paths_random, env_horizon)
 
     #========================================================
     # 
@@ -122,8 +175,8 @@ def train(env,
     # for normalizing inputs and denormalizing outputs
     # from the dynamics network. 
     # 
-    normalization = """ YOUR CODE HERE """
-
+    """ YOUR CODE HERE """
+    normalization = compute_normalization(data)
 
     #========================================================
     # 
@@ -164,7 +217,12 @@ def train(env,
     for itr in range(onpol_iters):
         """ YOUR CODE HERE """
 
+        new_data = sample(env, mpc_controller, num_paths_onpol, env_horizon)
+        data = new_data + data
+        dyn_model.fit(data) 
 
+        costs = [ path_cost( cost_fn, path ) for path in new_data ]
+        returns = [np.sum(path["reward"]) for path in new_data]
 
         # LOGGING
         # Statistics for performance of MPC policy using
